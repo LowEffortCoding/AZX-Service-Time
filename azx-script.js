@@ -70,7 +70,7 @@ function startGame() {
     hideSelectionBox();
     initGridDimensions(ROWS, COLS);
 
-    /*setRandomAvatar();*/
+    setRandomAvatar();
     
     gridData = Array.from( { length: ROWS }, () => Array(COLS).fill(0) );
     
