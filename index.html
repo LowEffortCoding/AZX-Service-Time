@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AZX Service Time</title>
+    <link rel="stylesheet" href="azx-style.css">
+    <script src="azx-script.js" defer></script>
+</head>
+
+<body>
+    <div class="game-container">
+        <div class="top-section">
+            <img id="player-avatar" class="avatar-img" src="" alt="Avatar">
+            <div class="top-bar">
+                <div class="controls">
+                    <button class="action-btn" id="pause-btn" onclick="togglePause()">Pause</button>
+                    <button class="action-btn" id="start-btn" onclick="startGame()">Restart</button>
+                </div>
+                <div class="header">
+                    <div class="stat-box">Score: <span id="score">0</span></div>
+                    <div class="stat-box">Sum: <span id="current-sum">0</span></div>
+                    <div class="stat-box">Time: <span id="timer">69</span></div>
+                </div>
+                <div class="powerups">
+                    <button class="powerup-btn" id="hint-btn" onclick="useHint()" style="background-color:var(--powerupbtn-hint-color)">Cat's Eye (<span id="hint-count">1</span>/1) [Q]</button>
+                    <button class="powerup-btn" id="shuffle-btn" onclick="useShuffle()" style="background-color:var(--powerupbtn-shuffle-color)">Feline Flurry (<span id="shuffle-count">1</span>/1) [W]</button>
+                    <button class="powerup-btn" id="bomb-btn" onclick="toggleBomb()">Thanks Fur All the Fish (<span id="bomb-count">1</span>/1) [E]</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="grid" id="grid">
+            <div class="selection-box" id="selection-box"></div>
+            
+            <div id="pause-overlay" class="overlay hidden">
+                <h2>GAME PAUSED</h2>
+                <p style="font-size: 0.9rem; color: beige;"></p>
+            </div>
+            
+            <div id="gameover-overlay" class="overlay hidden">
+                <h2 id="gameover-title" class="overlay hidden">GAME OVER</h2>
+                <p>Final Score: <span id="final-score">0</span></p>
+                <p>Final Block Clear Time: <span id="clear-time">0.000s</span></p>
+                <button class="action-btn" onclick="startGame()">Restart Game</button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

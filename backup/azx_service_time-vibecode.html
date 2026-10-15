@@ -1,0 +1,667 @@
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AZX Service Time</title>
+    <style>
+        :root {
+            --bg-color: #1a1a24;
+            --panel-bg: #262636;
+            --grid-bg: #111118;
+            --text-color: #ffffff;
+            --accent-color: #00d2ff;
+            --selected-color: #ff9900;
+            --valid-color: #00ff88;
+            --invalid-color: #ff4466;
+            --tile-bg: #323248;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .game-container {
+            background-color: var(--panel-bg);
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            font-size: 1.1rem;
+            font-weight: bold;
+        }
+
+        .stat-box {
+            background: var(--grid-bg);
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid #444;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(10, 40px);
+            grid-template-rows: repeat(10, 40px);
+            gap: 4px;
+            background-color: var(--grid-bg);
+            padding: 8px;
+            border-radius: 8px;
+            position: relative;
+            touch-action: none;
+        }
+
+        .tile {
+            background-color: var(--tile-bg);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.1s;
+            z-index: 1;
+        }
+
+        .tile.empty {
+            background-color: transparent;
+            cursor: default;
+        }
+
+        .tile.selected {
+            background-color: var(--selected-color);
+            color: #000;
+        }
+
+        .tile.highlight-valid {
+            background-color: var(--valid-color);
+            color: #000;
+        }
+
+        .tile.highlight-invalid {
+            background-color: var(--invalid-color);
+            color: #fff;
+        }
+
+        .tile.hint-active {
+            animation: pulse-hint 0.6s infinite alternate;
+        }
+
+        @keyframes pulse-hint {
+            0% { background-color: #00d2ff; color: #000; }
+            100% { background-color: #ffffff; color: #000; }
+        }
+
+        /* Selection Box Overlay */
+        .selection-box {
+            position: absolute;
+            border: 2px solid var(--accent-color);
+            background-color: rgba(0, 210, 255, 0.2);
+            border-radius: 4px;
+            pointer-events: none;
+            z-index: 2;
+            display: none;
+        }
+
+        .powerups {
+            display: flex;
+            gap: 8px;
+            width: 100%;
+        }
+
+        .powerup-btn {
+            flex: 1;
+            padding: 8px;
+            font-size: 0.85rem;
+            font-weight: bold;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            background-color: #ff0077;
+            color: #fff;
+            transition: opacity 0.2s, background-color 0.2s;
+        }
+
+        .powerup-btn:hover {
+            opacity: 0.9;
+        }
+
+        .powerup-btn.active {
+            background-color: #ffcc00;
+            color: #000;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            width: 100%;
+        }
+
+        .action-btn {
+            flex: 1;
+            padding: 10px;
+            font-size: 1rem;
+            font-weight: bold;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            background-color: var(--accent-color);
+            color: #000;
+        }
+
+        .overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.85);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            gap: 15px;
+            z-index: 10;
+        }
+
+        .overlay.hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="game-container">
+    <div class="header">
+        <div class="stat-box">Score: <span id="score">0</span></div>
+		<div class="stat-box">Sum: <span id="current-sum">0</span></div> 
+        <div class="stat-box">Time: <span id="timer">120</span>s</div>
+    </div>
+
+    <div class="grid" id="grid">
+        <div class="selection-box" id="selection-box"></div>
+
+        <div id="pause-overlay" class="overlay hidden">
+            <h2>GAME PAUSED</h2>
+            <p style="font-size: 0.9rem; color: #aaa;"></p>
+        </div>
+        <div id="gameover-overlay" class="overlay hidden">
+            <h2 id="gameover-title">GAME OVER</h2>
+            <p>Final Score: <span id="final-score">0</span></p>
+            <button class="action-btn" onclick="startGame()">Play Again</button>
+        </div>
+    </div>
+
+    <div class="powerups">
+        <button class="powerup-btn" onclick="useHint()">💡 Hint (<span id="hint-count">3</span>)</button>
+        <button class="powerup-btn" id="bomb-btn" onclick="toggleBombMode()">💣 Bomb (<span id="bomb-count">2</span>)</button>
+        <button class="powerup-btn" onclick="useShuffle()">🔀 Shuffle (<span id="shuffle-count">2</span>)</button>
+    </div>
+
+    <div class="controls">
+        <button class="action-btn" id="pause-btn" onclick="togglePause()">Pause</button>
+        <button class="action-btn" onclick="startGame()">Restart</button>
+    </div>
+</div>
+
+<script>
+    const ROWS = 10;
+    const COLS = 10;
+    const TOTAL_TIME = 160;
+
+    let gridData = [];
+    let isMouseDown = false;
+    let startTile = null;
+    let currentTile = null;
+    let selectedTiles = [];
+    let score = 0;
+    let timeRemaining = TOTAL_TIME;
+    let timerInterval = null;
+    let isPaused = false;
+    let isGameOver = false;
+
+    // Power-up charges
+    let hintsLeft = 3;
+    let bombsLeft = 2;
+    let shufflesLeft = 1;
+    let bombModeActive = false;
+
+    const gridEl = document.getElementById('grid');
+    const selectionBox = document.getElementById('selection-box');
+    const scoreEl = document.getElementById('score');
+    const currentSumEl = document.getElementById('current-sum');
+    const timerEl = document.getElementById('timer');
+    const pauseOverlay = document.getElementById('pause-overlay');
+    const gameoverOverlay = document.getElementById('gameover-overlay');
+    const pauseBtn = document.getElementById('pause-btn');
+
+    function startGame() {
+        clearInterval(timerInterval);
+        timeRemaining = TOTAL_TIME;
+        score = 0;
+        isPaused = false;
+        isGameOver = false;
+        isMouseDown = false;
+        startTile = null;
+        currentTile = null;
+        selectedTiles = [];
+        bombModeActive = false;
+
+        hintsLeft = 1;
+        bombsLeft = 1;
+        shufflesLeft = 1;
+        updatePowerupUI();
+
+        scoreEl.textContent = score;
+        timerEl.textContent = timeRemaining;
+        currentSumEl.textContent = 0;
+        pauseBtn.textContent = "Pause";
+        
+        pauseOverlay.classList.add('hidden');
+        gameoverOverlay.classList.add('hidden');
+        hideSelectionBox();
+
+        // 1. Initialize an empty 10x10 grid with zeros
+        gridData = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+
+        // Helper to check if a rectangular region is completely empty (all 0s)
+        function isRegionEmpty(r1, c1, r2, c2) {
+            for (let r = r1; r <= r2; r++) {
+                for (let c = c1; c <= c2; c++) {
+                    if (gridData[r][c] !== 0) return false;
+                }
+            }
+            return true;
+        }
+
+		// 1. Initialize an empty 10x10 grid with zeros
+        gridData = Array.from({ length: ROWS }, () => Array(COLS).fill(0));
+
+        // Helper to fill a region with numbers (1-9) summing to 10
+        function generateSum10Group(size) {
+            let cuts = new Set();
+            while (cuts.size < size - 1) {
+                cuts.add(Math.floor(Math.random() * 9) + 1);
+            }
+            let sortedCuts = [0, ...Array.from(cuts).sort((a, b) => a - b), 10];
+            let values = [];
+            for (let i = 0; i < sortedCuts.length - 1; i++) {
+                values.push(sortedCuts[i + 1] - sortedCuts[i]);
+            }
+            return values;
+        }
+
+        // 2. Define non-trivial multi-tile overlapping patterns & paths across the grid
+        // Partition board into 25 groups of 4-tile sets or 2-tile / 3-tile shapes spread out
+        let groups = [];
+        
+        // Generate valid sums totaling 10 for all 100 tiles
+        let allValues = [];
+        for (let i = 0; i < 20; i++) {
+            allValues.push(...generateSum10Group(3)); // 20 groups of 3 = 60 tiles
+        }
+        for (let i = 0; i < 10; i++) {
+            allValues.push(...generateSum10Group(4)); // 10 groups of 4 = 40 tiles
+        }
+
+        // 3. Populate grid in an intertwined spiral/checker pattern rather than block-by-block
+        let positions = [];
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                positions.push({ r, c });
+            }
+        }
+
+        // Interleave positions so clearing requires larger drag boxes or clearing obstacles first
+        // Sort positions by diagonal distance (r + c) or patterned strides
+        positions.sort((a, b) => {
+            let keyA = (a.r * 3 + a.c * 7) % 100;
+            let keyB = (b.r * 3 + b.c * 7) % 100;
+            return keyA - keyB;
+        });
+
+        // Assign sum-10 sets along the interleaved spatial coordinates
+        let valIndex = 0;
+        for (let i = 0; i < positions.length; i++) {
+            gridData[positions[i].r][positions[i].c] = allValues[i];
+        }
+
+        // 4. Validate board solvability check
+        // Ensure at least 1 move is immediately available; if not, retry generation instantly
+        if (!findValidCombination()) {
+            startGame(); // Re-roll board layout
+            return;
+        }
+
+        renderGrid();
+        
+		if (!isPaused) {
+			timerInterval = setInterval(() => {
+				timeRemaining--;
+				timerEl.textContent = timeRemaining;
+				if (timeRemaining <= 0) {
+					endGame("TIME'S UP!");
+				}
+			}, 1000);
+		}
+    }
+
+    function renderGrid() {
+        const tiles = gridEl.querySelectorAll('.tile');
+        tiles.forEach(t => t.remove());
+
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                const tile = document.createElement('div');
+                tile.classList.add('tile');
+                tile.dataset.row = r;
+                tile.dataset.col = c;
+
+                if (gridData[r][c] === 0) {
+                    tile.classList.add('empty');
+                } else {
+                    tile.textContent = gridData[r][c];
+                }
+
+                gridEl.appendChild(tile);
+            }
+        }
+    }
+
+    // --- Mouse Drag & Bounding Box Logic ---
+    gridEl.addEventListener('mousedown', (e) => {
+        if (isPaused || isGameOver) return;
+        const tileEl = e.target.closest('.tile');
+        
+        if (bombModeActive) {
+            if (tileEl && !tileEl.classList.contains('empty')) {
+                const r = parseInt(tileEl.dataset.row);
+                const c = parseInt(tileEl.dataset.col);
+                gridData[r][c] = 0;
+                bombsLeft--;
+                bombModeActive = false;
+                updatePowerupUI();
+                renderGrid();
+                checkPossibleMoves();
+            }
+            return;
+        }
+
+        if (!tileEl || tileEl.classList.contains('empty')) return;
+
+        isMouseDown = true;
+        startTile = { r: parseInt(tileEl.dataset.row), c: parseInt(tileEl.dataset.col) };
+        currentTile = { ...startTile };
+        updateSelection(startTile, currentTile);
+    });
+
+    window.addEventListener('mousemove', (e) => {
+        if (!isMouseDown || isPaused || isGameOver) return;
+
+        const tileEl = document.elementFromPoint(e.clientX, e.clientY)?.closest('.tile');
+        if (tileEl) {
+            const r = parseInt(tileEl.dataset.row);
+            const c = parseInt(tileEl.dataset.col);
+            if (r !== currentTile.r || c !== currentTile.c) {
+                currentTile = { r, c };
+                updateSelection(startTile, currentTile);
+            }
+        }
+    });
+
+    window.addEventListener('mouseup', () => {
+        if (!isMouseDown) return;
+        isMouseDown = false;
+        hideSelectionBox();
+        processSelection();
+    });
+
+    function updateSelection(start, end) {
+        clearHighlights();
+
+        selectedTiles = [];
+        let sum = 0;
+
+        const minR = Math.min(start.r, end.r);
+        const maxR = Math.max(start.r, end.r);
+        const minC = Math.min(start.c, end.c);
+        const maxC = Math.max(start.c, end.c);
+
+        for (let r = minR; r <= maxR; r++) {
+            for (let c = minC; c <= maxC; c++) {
+                if (gridData[r][c] !== 0) {
+                    selectedTiles.push({ r, c });
+                    sum += gridData[r][c];
+                }
+            }
+        }
+
+        currentSumEl.textContent = sum;
+
+        selectedTiles.forEach(pos => {
+            const el = getTileElement(pos.r, pos.c);
+            if (el) el.classList.add('selected');
+        });
+
+        // Draw selection box outline
+        const startEl = getTileElement(minR, minC);
+        const endEl = getTileElement(maxR, maxC);
+
+        if (startEl && endEl) {
+            const gridRect = gridEl.getBoundingClientRect();
+            const startRect = startEl.getBoundingClientRect();
+            const endRect = endEl.getBoundingClientRect();
+
+            selectionBox.style.left = (startRect.left - gridRect.left - 2) + 'px';
+            selectionBox.style.top = (startRect.top - gridRect.top - 2) + 'px';
+            selectionBox.style.width = (endRect.right - startRect.left - 4) + 'px';
+            selectionBox.style.height = (endRect.bottom - startRect.top - 4) + 'px';
+            selectionBox.style.display = 'block';
+        }
+    }
+
+    function hideSelectionBox() {
+        selectionBox.style.display = 'none';
+    }
+
+    function processSelection() {
+        if (selectedTiles.length === 0) return;
+
+        let sum = selectedTiles.reduce((acc, pos) => acc + gridData[pos.r][pos.c], 0);
+
+        if (sum === 10) {
+            selectedTiles.forEach(pos => {
+                const el = getTileElement(pos.r, pos.c);
+                if (el) el.classList.add('highlight-valid');
+                gridData[pos.r][pos.c] = 0;
+            });
+
+            score += selectedTiles.length * 10;
+            scoreEl.textContent = score;
+
+            setTimeout(() => {
+                renderGrid();
+                resetSelection();
+                checkPossibleMoves();
+            }, 150);
+
+        } else {
+            selectedTiles.forEach(pos => {
+                const el = getTileElement(pos.r, pos.c);
+                if (el) el.classList.add('highlight-invalid');
+            });
+
+            setTimeout(() => {
+                resetSelection();
+            }, 250);
+        }
+    }
+
+    function clearHighlights() {
+        document.querySelectorAll('.tile').forEach(t => {
+            t.classList.remove('selected', 'highlight-valid', 'highlight-invalid', 'hint-active');
+        });
+    }
+
+    function resetSelection() {
+        startTile = null;
+        currentTile = null;
+        selectedTiles = [];
+        currentSumEl.textContent = 0;
+        clearHighlights();
+    }
+
+    // --- Power-up Implementation ---
+    function useHint() {
+        if (hintsLeft <= 0 || isPaused || isGameOver) return;
+
+        const move = findValidCombination();
+        if (move) {
+            hintsLeft--;
+            updatePowerupUI();
+            clearHighlights();
+
+            for (let r = move.r1; r <= move.r2; r++) {
+                for (let c = move.c1; c <= move.c2; c++) {
+                    if (gridData[r][c] !== 0) {
+                        const el = getTileElement(r, c);
+                        if (el) el.classList.add('hint-active');
+                    }
+                }
+            }
+
+            setTimeout(() => {
+                clearHighlights();
+            }, 2500);
+        }
+    }
+
+    function toggleBombMode() {
+        if (bombsLeft <= 0 || isPaused || isGameOver) return;
+        bombModeActive = !bombModeActive;
+        updatePowerupUI();
+    }
+
+    function useShuffle() {
+        if (shufflesLeft <= 0 || isPaused || isGameOver) return;
+
+        let activeValues = [];
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                if (gridData[r][c] !== 0) {
+                    activeValues.push(gridData[r][c]);
+                }
+            }
+        }
+
+        // Shuffle array values
+        for (let i = activeValues.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [activeValues[i], activeValues[j]] = [activeValues[j], activeValues[i]];
+        }
+
+        // Put shuffled values back in original positions
+        let index = 0;
+        for (let r = 0; r < ROWS; r++) {
+            for (let c = 0; c < COLS; c++) {
+                if (gridData[r][c] !== 0) {
+                    gridData[r][c] = activeValues[index++];
+                }
+            }
+        }
+
+        shufflesLeft--;
+        updatePowerupUI();
+        renderGrid();
+        checkPossibleMoves();
+    }
+
+    function updatePowerupUI() {
+        document.getElementById('hint-count').textContent = hintsLeft;
+        document.getElementById('bomb-count').textContent = bombsLeft;
+        document.getElementById('shuffle-count').textContent = shufflesLeft;
+
+        const bombBtn = document.getElementById('bomb-btn');
+        if (bombModeActive) {
+            bombBtn.classList.add('active');
+        } else {
+            bombBtn.classList.remove('active');
+        }
+    }
+
+    function findValidCombination() {
+        for (let r1 = 0; r1 < ROWS; r1++) {
+            for (let c1 = 0; c1 < COLS; c1++) {
+                for (let r2 = r1; r2 < ROWS; r2++) {
+                    for (let c2 = c1; c2 < COLS; c2++) {
+                        let sum = 0;
+                        let count = 0;
+                        for (let r = r1; r <= r2; r++) {
+                            for (let c = c1; c <= c2; c++) {
+                                if (gridData[r][c] !== 0) {
+                                    sum += gridData[r][c];
+                                    count++;
+                                }
+                            }
+                        }
+                        if (sum === 10 && count > 0) {
+                            return { r1, c1, r2, c2 };
+                        }
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    function checkPossibleMoves() {
+        if (!findValidCombination()) {
+            endGame("NO MORE MOVES!");
+            return false;
+        }
+        return true;
+    }
+
+    function getTileElement(r, c) {
+        return gridEl.querySelector(`.tile[data-row="${r}"][data-col="${c}"]`);
+    }
+
+    function togglePause() {
+        if (isGameOver) return;
+        isPaused = !isPaused;
+        if (isPaused) {
+            pauseOverlay.classList.remove('hidden');
+            pauseBtn.textContent = "Resume";
+        } else {
+            pauseOverlay.classList.add('hidden');
+            pauseBtn.textContent = "Pause";
+        }
+    }
+
+    function endGame(reason) {
+        isGameOver = true;
+        clearInterval(timerInterval);
+        document.getElementById('gameover-title').textContent = reason;
+        document.getElementById('final-score').textContent = score;
+        gameoverOverlay.classList.remove('hidden');
+    }
+
+    startGame();
+</script>
+</body>
